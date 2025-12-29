@@ -59,16 +59,21 @@ pub async fn handle_cart_action(
 
             bot.answer_callback_query(q.id).await?;
             return Ok(());
+        },
+        CartAction::Reset => {
+            if let Err(err) = cart_repo::reset_cart(&ctx.db, cart.id).await {
+                log::error!("reset cart failed: {:?}", err);
+            }
         }
+        ,
         CartAction::Inc(item_id) => {
             cart_repo::inc_item(&ctx.db, cart.id, item_id).await?;
         }
         CartAction::Dec(item_id) => {
             cart_repo::dec_item(&ctx.db, cart.id, item_id).await?;
         }
-        CartAction::Del(item_id) => {
-            cart_repo::remove_item(&ctx.db, cart.id, item_id).await?;
-        }
+        
+
     }
 
     // رندر جدید
@@ -98,7 +103,7 @@ enum CartAction {
     Checkout,
     Inc(Uuid),
     Dec(Uuid),
-    Del(Uuid),
+    Reset
 }
 
 fn parse_action(data: &str) -> CartAction {
@@ -107,6 +112,7 @@ fn parse_action(data: &str) -> CartAction {
     // cart:del:<uuid>
     // cart:noop:<uuid>
     // cart:checkout
+
     let mut parts = data.split(':');
 
     let ns = parts.next().unwrap_or("");
@@ -116,10 +122,10 @@ fn parse_action(data: &str) -> CartAction {
 
     match parts.next().unwrap_or("") {
         "checkout" => CartAction::Checkout,
+        "reset" => CartAction::Reset,
         "noop" => CartAction::Noop,
         "inc" => parse_uuid(parts.next()).map(CartAction::Inc).unwrap_or(CartAction::Noop),
         "dec" => parse_uuid(parts.next()).map(CartAction::Dec).unwrap_or(CartAction::Noop),
-        "del" => parse_uuid(parts.next()).map(CartAction::Del).unwrap_or(CartAction::Noop),
         _ => CartAction::Noop,
     }
 }

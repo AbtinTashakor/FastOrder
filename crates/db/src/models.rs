@@ -22,10 +22,10 @@ pub struct MenuCategoryRow {
 pub struct MenuItemRow {
     pub id: Uuid,
     pub category_id: Uuid,
+    pub category_title: String,
     pub title: String,
     pub price: i64,
     pub position: i32,
-    pub is_available: bool,
 }
 
 #[derive(sqlx::FromRow, Debug)]

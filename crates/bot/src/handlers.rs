@@ -133,9 +133,15 @@ pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> Response
             };
 
             // جمع‌کردن ReplyKeyboard
-            bot.send_message(chat_id, "📋 منو در حال بارگذاری است...")
-                .reply_markup(KeyboardRemove::new())
-                .await?;
+            bot.send_message(
+                chat_id,
+                "👇 منو اینجاست
+با دکمه‌های + و − انتخاب کن
+سفارشت بالا، به‌صورت لحظه‌ای نشون داده می‌شه
+وقتی تموم شدی، روی «✅ تکمیل سفارش» بزن",
+            )
+            .reply_markup(KeyboardRemove::new())
+            .await?;
 
             match render_cart_view(&ctx.db, customer.id).await {
                 Ok((text, keyboard)) => {
@@ -184,7 +190,6 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery, ctx: BotContext) -> Res
     if let Err(err) = handle_cart_action(bot, ctx, q).await {
         log::error!("callback error: {:?}", err);
     }
-
 
     respond(())
 }

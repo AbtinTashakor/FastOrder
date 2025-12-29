@@ -54,7 +54,7 @@ pub async fn inc_item(pool: &PgPool, cart_id: Uuid, menu_item_id: Uuid) -> Resul
 pub async fn dec_item(pool: &PgPool, cart_id: Uuid, menu_item_id: Uuid) -> Result<()> {
     // Atomic: if quantity == 1 -> delete
     // else -> decrement
-    let affected: (i64,) = sqlx::query_as(
+    let affected: (i32,) = sqlx::query_as(
         r#"
         WITH existing AS (
             SELECT quantity
@@ -93,21 +93,6 @@ pub async fn dec_item(pool: &PgPool, cart_id: Uuid, menu_item_id: Uuid) -> Resul
     Ok(())
 }
 
-pub async fn remove_item(pool: &PgPool, cart_id: Uuid, menu_item_id: Uuid) -> Result<()> {
-    sqlx::query(
-        r#"
-        DELETE FROM cart_items
-        WHERE cart_id = $1 AND menu_item_id = $2
-        "#,
-    )
-    .bind(cart_id)
-    .bind(menu_item_id)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
 pub async fn list_cart_items(pool: &PgPool, cart_id: Uuid) -> Result<Vec<CartItemRow>> {
     let rows = sqlx::query_as::<_, CartItemRow>(
         r#"
@@ -138,6 +123,15 @@ pub async fn lock_cart(pool: &PgPool, cart_id: Uuid) -> Result<()> {
     if updated.rows_affected() == 0 {
         return Err(anyhow!("cart not found or not active"));
     }
+
+    Ok(())
+}
+
+pub async fn reset_cart(pool: &PgPool, cart_id: Uuid) -> Result<()> {
+    sqlx::query("DELETE FROM cart_items WHERE cart_id = $1")
+        .bind(cart_id)
+        .execute(pool)
+        .await?;
 
     Ok(())
 }
