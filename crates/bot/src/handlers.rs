@@ -1,44 +1,63 @@
 use teloxide::prelude::*;
 use teloxide::types::KeyboardRemove;
-use teloxide::types::Message;
-
-use crate::context::BotContext;
-use crate::keyboards::request_phone_keyboard;
-use db::customer_repo;
 
 use crate::callbacks::cart::handle_cart_action;
-use teloxide::types::CallbackQuery;
+use crate::context::BotContext;
+use crate::keyboards::{order_entry_keyboard, request_phone_keyboard};
+use crate::views::cart_view::render_cart_view;
+use db::customer_repo;
 
+const WELCOME_TEXT: &str = "👋 خوش اومدی به FastOrder!\nسفارش سریع، بدون تماس تلفنی.";
 
-/// هندلر اصلی پیام‌ها
 pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> ResponseResult<()> {
-    // ===== /start =====
+    let chat_id = msg.chat.id;
+
+    /* ─────────────────────────────
+     * /start
+     * ───────────────────────────── */
     if let Some(text) = msg.text() {
         if text == "/start" {
-            bot.send_message(
-                msg.chat.id,
-                "👋 به FastOrder خوش آمدید\n\n\
-                 برای ادامه، لطفاً شماره تلفن خود را ارسال کنید.",
-            )
-            .reply_markup(request_phone_keyboard())
-            .await?;
+            // پیام خوش‌آمد
+            bot.send_message(chat_id, WELCOME_TEXT).await?;
+
+            let user_id = match msg.from.as_ref() {
+                Some(u) => u.id.0 as i64,
+                None => return Ok(()),
+            };
+
+            match customer_repo::find_by_telegram_id(&ctx.db, user_id).await {
+                Ok(Some(_)) => {
+                    // قبلاً احراز شده
+                    bot.send_message(chat_id, "برای شروع سفارش، روی «🛒 سفارش جدید» بزن 👇")
+                        .reply_markup(order_entry_keyboard())
+                        .await?;
+                }
+                Ok(None) => {
+                    // احراز نشده
+                    bot.send_message(
+                        chat_id,
+                        "برای استفاده از سرویس، لطفاً شماره تلفن خودت رو ارسال کن 👇",
+                    )
+                    .reply_markup(request_phone_keyboard())
+                    .await?;
+                }
+                Err(err) => {
+                    log::error!("start lookup failed: {:?}", err);
+                    bot.send_message(chat_id, "❌ خطایی رخ داد").await?;
+                }
+            }
 
             return Ok(());
         }
     }
 
-    // ===== دریافت Contact از تلگرام =====
+    /* ─────────────────────────────
+     * Contact (احراز هویت)
+     * ───────────────────────────── */
     if let Some(contact) = msg.contact() {
         log::info!(
             "📱 Contact received | raw phone_number = '{}'",
             contact.phone_number
-        );
-
-        log::info!(
-            "📱 Contact details | user_id = {:?}, first_name = {:?}, last_name = {:?}",
-            contact.user_id,
-            contact.first_name,
-            contact.last_name
         );
 
         let phone = match normalize_phone(&contact.phone_number) {
@@ -50,61 +69,90 @@ pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> Response
             }
         };
 
+        let user_id = match msg.from.as_ref() {
+            Some(u) => u.id.0 as i64,
+            None => return Ok(()),
+        };
+
         match customer_repo::find_by_phone(&ctx.db, &phone).await {
-            // مشتری معتبر
             Ok(Some(customer)) => {
-                if let Some(user) = msg.from.as_ref() {
-                    if let Err(e) = customer_repo::verify_and_bind_telegram(
-                        &ctx.db,
-                        customer.id,
-                        user.id.0 as i64,
-                    )
-                    .await
-                    {
-                        // خطای DB → لاگ، ولی بات crash نکنه
-                        log::error!(
-                            "Failed to bind telegram user {} to customer {}: {:?}",
-                            user.id.0,
-                            customer.id,
-                            e
-                        );
-                    }
+                if let Err(err) =
+                    customer_repo::verify_and_bind_telegram(&ctx.db, customer.id, user_id).await
+                {
+                    log::error!("verify failed: {:?}", err);
+                    bot.send_message(chat_id, "❌ خطا در احراز هویت").await?;
+                    return Ok(());
                 }
 
-                bot.send_message(
-                    msg.chat.id,
-                    "✅ احراز هویت انجام شد.\nمی‌توانید سفارش خود را ثبت کنید.",
-                )
-                .reply_markup(KeyboardRemove::new())
-                .await?;
-            }
+                // حذف کیبورد ارسال شماره
+                bot.send_message(chat_id, "✅ احراز هویت با موفقیت انجام شد")
+                    .reply_markup(KeyboardRemove::new())
+                    .await?;
 
-            // شماره در whitelist نیست
+                // نمایش دکمه سفارش جدید
+                bot.send_message(chat_id, "برای شروع سفارش، روی «🛒 سفارش جدید» بزن 👇")
+                    .reply_markup(order_entry_keyboard())
+                    .await?;
+            }
             Ok(None) => {
-                bot.send_message(
-                    msg.chat.id,
-                    "❌ شماره شما در لیست مشتریان ثبت نشده است.\n\
-                     لطفاً با رستوران تماس بگیرید.",
-                )
-                .await?;
+                bot.send_message(chat_id, "❌ شماره شما ثبت نشده است")
+                    .await?;
             }
-
-            // خطای دیتابیس
-            Err(e) => {
-                log::error!("Database error during auth: {:?}", e);
-
-                bot.send_message(
-                    msg.chat.id,
-                    "⚠️ خطای داخلی رخ داد.\nلطفاً کمی بعد دوباره تلاش کنید.",
-                )
-                .await?;
+            Err(err) => {
+                log::error!("contact auth failed: {:?}", err);
+                bot.send_message(chat_id, "❌ خطایی رخ داد").await?;
             }
         }
 
         return Ok(());
     }
 
-    // ===== سایر پیام‌ها (فعلاً نادیده گرفته می‌شوند) =====
+    /* ─────────────────────────────
+     * 🛒 سفارش جدید
+     * ───────────────────────────── */
+    if let Some(text) = msg.text() {
+        if text == "🛒 سفارش جدید" {
+            let user_id = match msg.from.as_ref() {
+                Some(u) => u.id.0 as i64,
+                None => return Ok(()),
+            };
+
+            let customer = match customer_repo::find_by_telegram_id(&ctx.db, user_id).await {
+                Ok(Some(c)) => c,
+                Ok(None) => {
+                    bot.send_message(chat_id, "❌ ابتدا باید احراز هویت شوید")
+                        .reply_markup(request_phone_keyboard())
+                        .await?;
+                    return Ok(());
+                }
+                Err(err) => {
+                    log::error!("order entry lookup failed: {:?}", err);
+                    bot.send_message(chat_id, "❌ خطایی رخ داد").await?;
+                    return Ok(());
+                }
+            };
+
+            // جمع‌کردن ReplyKeyboard
+            bot.send_message(chat_id, "📋 منو در حال بارگذاری است...")
+                .reply_markup(KeyboardRemove::new())
+                .await?;
+
+            match render_cart_view(&ctx.db, customer.id).await {
+                Ok((text, keyboard)) => {
+                    bot.send_message(chat_id, text)
+                        .reply_markup(keyboard)
+                        .await?;
+                }
+                Err(err) => {
+                    log::error!("render cart failed: {:?}", err);
+                    bot.send_message(chat_id, "❌ خطا در نمایش منو").await?;
+                }
+            }
+
+            return Ok(());
+        }
+    }
+
     Ok(())
 }
 
