@@ -1,7 +1,7 @@
-use uuid::Uuid;
 use chrono::NaiveDateTime;
+use uuid::Uuid;
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
 pub struct CustomerRow {
     pub id: Uuid,
     pub phone_number: String,
@@ -10,24 +10,50 @@ pub struct CustomerRow {
     pub created_at: NaiveDateTime,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
+pub struct MenuCategoryRow {
+    pub id: Uuid,
+    pub title: String,
+    pub position: i32,
+    pub is_active: bool,
+}
+
+#[derive(sqlx::FromRow, Debug)]
 pub struct MenuItemRow {
     pub id: Uuid,
     pub category_id: Uuid,
     pub title: String,
     pub price: i64,
+    pub position: i32,
     pub is_available: bool,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
 pub struct CartRow {
     pub id: Uuid,
     pub customer_id: Uuid,
-    pub status: String,
+    pub status: String, // 'active' | 'locked'
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
 pub struct CartItemRow {
     pub menu_item_id: Uuid,
+    pub quantity: i32,
+}
+
+#[derive(sqlx::FromRow, Debug)]
+pub struct OrderRow {
+    pub id: Uuid,
+    pub customer_id: Uuid,
+    pub total_price: i64,
+    pub status: String, // 'pending' | 'accepted' | 'rejected'
+    pub prep_time_minutes: Option<i32>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(sqlx::FromRow, Debug)]
+pub struct OrderItemSnapshotRow {
+    pub title_snapshot: String,
+    pub price_snapshot: i64,
     pub quantity: i32,
 }
