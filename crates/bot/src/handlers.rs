@@ -1,4 +1,5 @@
 use teloxide::prelude::*;
+use teloxide::types::KeyboardRemove;
 use teloxide::types::Message;
 
 use crate::context::BotContext;
@@ -7,6 +8,7 @@ use db::customer_repo;
 
 use crate::callbacks::cart::handle_cart_action;
 use teloxide::types::CallbackQuery;
+
 
 /// هندلر اصلی پیام‌ها
 pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> ResponseResult<()> {
@@ -73,6 +75,7 @@ pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> Response
                     msg.chat.id,
                     "✅ احراز هویت انجام شد.\nمی‌توانید سفارش خود را ثبت کنید.",
                 )
+                .reply_markup(KeyboardRemove::new())
                 .await?;
             }
 
