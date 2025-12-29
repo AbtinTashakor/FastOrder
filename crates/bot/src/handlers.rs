@@ -185,5 +185,6 @@ pub async fn handle_callback(bot: Bot, q: CallbackQuery, ctx: BotContext) -> Res
         log::error!("callback error: {:?}", err);
     }
 
+
     respond(())
 }
