@@ -37,3 +37,24 @@ pub async fn verify_and_bind_telegram(
 
     Ok(())
 }
+
+
+pub async fn find_by_telegram_id(
+    pool: &PgPool,
+    telegram_user_id: i64,
+) -> anyhow::Result<Option<CustomerRow>> {
+    let customer = sqlx::query_as::<_, CustomerRow>(
+        r#"
+        SELECT *
+        FROM customers
+        WHERE telegram_user_id = $1
+          AND is_verified = true
+        "#,
+    )
+    .bind(telegram_user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(customer)
+}
+

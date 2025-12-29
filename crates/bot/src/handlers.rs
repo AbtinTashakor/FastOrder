@@ -5,12 +5,11 @@ use crate::context::BotContext;
 use crate::keyboards::request_phone_keyboard;
 use db::customer_repo;
 
+use crate::callbacks::cart::handle_cart_action;
+use teloxide::types::CallbackQuery;
+
 /// هندلر اصلی پیام‌ها
-pub async fn handle_message(
-    bot: Bot,
-    msg: Message,
-    ctx: BotContext,
-) -> ResponseResult<()> {
+pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> ResponseResult<()> {
     // ===== /start =====
     if let Some(text) = msg.text() {
         if text == "/start" {
@@ -33,7 +32,7 @@ pub async fn handle_message(
         match customer_repo::find_by_phone(&ctx.db, &phone).await {
             // مشتری معتبر
             Ok(Some(customer)) => {
-                if let Some(user) = msg.from() {
+                if let Some(user) = msg.from.as_ref() {
                     if let Err(e) = customer_repo::verify_and_bind_telegram(
                         &ctx.db,
                         customer.id,
@@ -95,4 +94,12 @@ fn normalize_phone(raw: &str) -> String {
         .replace(')', "")
         .trim()
         .to_string()
+}
+
+pub async fn handle_callback(bot: Bot, q: CallbackQuery, ctx: BotContext) -> ResponseResult<()> {
+    if let Err(err) = handle_cart_action(bot, ctx, q).await {
+        log::error!("callback error: {:?}", err);
+    }
+
+    respond(())
 }
