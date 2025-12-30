@@ -3,6 +3,6 @@ edition = "2021"
 resolver = "2"
 members = [
     "crates/bot",
-    "crates/core",
+    "crates/app",
     "crates/db"
 ]

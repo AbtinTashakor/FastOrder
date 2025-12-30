@@ -1,6 +1,5 @@
 use teloxide::prelude::*;
 use teloxide::types::KeyboardRemove;
-use uuid::Uuid;
 
 use crate::callbacks::cart::handle_cart_action;
 use crate::context::BotContext;

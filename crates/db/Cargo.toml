@@ -10,3 +10,7 @@ dotenvy = "0.15"
 anyhow = "1.0"
 uuid = "1.19.0"
 chrono = "0.4.42"
+async-trait = "0.1.89"
+
+# workspace crates
+app = { path = "../app" }

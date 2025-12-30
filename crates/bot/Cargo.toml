@@ -14,6 +14,6 @@ sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chro
 thousands = "0.2"
 
 # workspace crates
-core = { path = "../core" }
+app = { path = "../app" }
 db = { path = "../db" }
 uuid = "1.19.0"
