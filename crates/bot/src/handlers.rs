@@ -1,5 +1,6 @@
 use teloxide::prelude::*;
 use teloxide::types::KeyboardRemove;
+use uuid::Uuid;
 
 use crate::callbacks::cart::handle_cart_action;
 use crate::context::BotContext;
@@ -135,10 +136,7 @@ pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> Response
             // جمع‌کردن ReplyKeyboard
             bot.send_message(
                 chat_id,
-                "👇 منو اینجاست
-با دکمه‌های + و − انتخاب کن
-سفارشت بالا، به‌صورت لحظه‌ای نشون داده می‌شه
-وقتی تموم شدی، روی «✅ تکمیل سفارش» بزن",
+                "👇 منو اینجاست\nبا دکمه‌های + و − انتخاب کن\nسفارشت بالا، به‌صورت لحظه‌ای نشون داده می‌شه\nوقتی تموم شدی، روی «✅ تکمیل سفارش» بزن",
             )
             .reply_markup(KeyboardRemove::new())
             .await?;

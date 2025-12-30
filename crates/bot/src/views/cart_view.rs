@@ -92,7 +92,7 @@ pub async fn render_cart_view(
 
         if qty > 0 {
             controls.push(InlineKeyboardButton::callback(
-                "−",
+                "➖",
                 format!("cart:dec:{}", item.id),
             ));
         } else {
@@ -100,7 +100,7 @@ pub async fn render_cart_view(
         }
 
         controls.push(InlineKeyboardButton::callback(
-            "+",
+            "➕",
             format!("cart:inc:{}", item.id),
         ));
 
@@ -109,10 +109,53 @@ pub async fn render_cart_view(
 
     if total > 0 {
         keyboard.push(vec![
-            InlineKeyboardButton::callback("✅ تکمیل سفارش", "cart:checkout".to_string()),
+            InlineKeyboardButton::callback("✅ تکمیل سفارش", "cart:complete".to_string()),
             InlineKeyboardButton::callback("🔄 سفارش جدید", "cart:reset".to_string()),
         ]);
     }
 
     Ok((text, InlineKeyboardMarkup::new(keyboard)))
+}
+
+use sqlx::PgPool;
+
+
+
+pub async fn render_confirming_view(pool: &PgPool, cart_id: Uuid) -> anyhow::Result<String> {
+    let items = cart_repo::list_cart_items(pool, cart_id).await?;
+
+    let mut lines = Vec::new();
+    let mut total: i64 = 0;
+
+    for item in items {
+        let line_total = item.price_snapshot * item.quantity as i64;
+        total += line_total;
+
+        lines.push(format!(
+            "• {} × {} — {} تومان",
+            item.title,  
+            item.quantity,
+            line_total.separate_with_commas()
+        ));
+    }
+
+    let text = format!(
+        "🧾 *خلاصه سفارش شما:*\n\n{}\n\n\
+         ───────────────\n\
+         💰 *جمع کل:* {} تومان\n\n\
+         ❓ آیا سفارش نهایی شود؟",
+        lines.join("\n"),
+        total.separate_with_commas()
+    );
+
+    Ok(text)
+}
+
+pub fn confirming_keyboard() -> InlineKeyboardMarkup {
+    InlineKeyboardMarkup::new(vec![
+        vec![
+            InlineKeyboardButton::callback("✏️ ویرایش سفارش", "cart:edit"),
+            InlineKeyboardButton::callback("✅ تأیید نهایی", "cart:confirm"),
+        ],
+    ])
 }

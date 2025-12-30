@@ -37,8 +37,10 @@ pub struct CartRow {
 
 #[derive(sqlx::FromRow, Debug)]
 pub struct CartItemRow {
+    pub title: String,
     pub menu_item_id: Uuid,
     pub quantity: i32,
+    pub price_snapshot: i64,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -49,6 +51,7 @@ pub struct OrderRow {
     pub status: String, // 'pending' | 'accepted' | 'rejected'
     pub prep_time_minutes: Option<i32>,
     pub created_at: NaiveDateTime,
+    pub daily_no: i32,
 }
 
 #[derive(sqlx::FromRow, Debug)]
