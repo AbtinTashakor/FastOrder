@@ -7,15 +7,15 @@ use crate::models::{CartItemRow, CartRow};
 
 /// Gets the current active cart for customer or creates a new one.
 /// Active cart is editable (+/-).
-pub async fn get_or_create_active_cart(pool: &PgPool, customer_id: Uuid) -> Result<CartRow> {
+pub async fn get_or_create_active_cart(pool: &PgPool, user_id: Uuid) -> Result<CartRow> {
     if let Some(cart) = sqlx::query_as::<_, CartRow>(
         r#"
-        SELECT id, customer_id, status
+        SELECT id, user_id, status
         FROM carts
-        WHERE customer_id = $1 AND status = 'active'
+        WHERE user_id = $1 AND status = 'active'
         "#,
     )
-    .bind(customer_id)
+    .bind(user_id)
     .fetch_optional(pool)
     .await?
     {
@@ -24,12 +24,12 @@ pub async fn get_or_create_active_cart(pool: &PgPool, customer_id: Uuid) -> Resu
 
     let cart = sqlx::query_as::<_, CartRow>(
         r#"
-        INSERT INTO carts (customer_id, status)
+        INSERT INTO carts (user_id, status)
         VALUES ($1, 'active')
-        RETURNING id, customer_id, status
+        RETURNING id, user_id, status
         "#,
     )
-    .bind(customer_id)
+    .bind(user_id)
     .fetch_one(pool)
     .await?;
 
@@ -230,19 +230,19 @@ pub async fn reset_cart(pool: &PgPool, cart_id: Uuid) -> Result<()> {
 
 pub async fn get_confirming_cart(
     pool: &PgPool,
-    customer_id: Uuid,
+    user_id: Uuid,
 ) -> Result<CartRow> {
     sqlx::query_as!(
         CartRow,
         r#"
-        SELECT id, customer_id, status
+        SELECT id, user_id, status
         FROM carts
-        WHERE customer_id = $1
+        WHERE user_id = $1
           AND status = 'confirming'
         ORDER BY updated_at DESC
         LIMIT 1
         "#,
-        customer_id
+        user_id
     )
     .fetch_one(pool)
     .await

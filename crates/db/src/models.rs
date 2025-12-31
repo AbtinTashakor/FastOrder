@@ -6,7 +6,6 @@ pub struct CustomerRow {
     pub id: Uuid,
     pub phone_number: String,
     pub telegram_user_id: Option<i64>,
-    pub is_verified: bool,
     pub created_at: NaiveDateTime,
 }
 
@@ -31,7 +30,7 @@ pub struct MenuItemRow {
 #[derive(sqlx::FromRow, Debug)]
 pub struct CartRow {
     pub id: Uuid,
-    pub customer_id: Uuid,
+    pub user_id: Uuid,
     pub status: String, // 'active' | 'locked'
 }
 
@@ -46,7 +45,7 @@ pub struct CartItemRow {
 #[derive(sqlx::FromRow, Debug)]
 pub struct OrderRow {
     pub id: Uuid,
-    pub customer_id: Uuid,
+    pub user_id: Uuid,
     pub total_price: i64,
     pub status: String, // 'pending' | 'accepted' | 'rejected'
     pub prep_time_minutes: Option<i32>,

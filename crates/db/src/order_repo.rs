@@ -17,7 +17,7 @@ use crate::models::{OrderItemSnapshotRow, OrderRow};
 
 pub async fn create_order_from_cart(
     pool: &PgPool,
-    customer_id: Uuid,
+    user_id: Uuid,
     cart_id: Uuid,
 ) -> Result<OrderRow> {
     let mut tx = pool.begin().await?;
@@ -29,12 +29,12 @@ pub async fn create_order_from_cart(
         SET status = 'locked',
             updated_at = NOW()
         WHERE id = $1
-          AND customer_id = $2
+          AND user_id = $2
           AND status = 'confirming'
         RETURNING id
         "#,
         cart_id,
-        customer_id
+        user_id
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -99,7 +99,7 @@ pub async fn create_order_from_cart(
     let order = sqlx::query_as::<_, OrderRow>(
         r#"
         INSERT INTO orders (
-            customer_id,
+            user_id,
             order_day,
             daily_no,
             order_code,
@@ -116,7 +116,7 @@ pub async fn create_order_from_cart(
         )
         RETURNING
             id,
-            customer_id,
+            user_id,
             order_day,
             daily_no,
             order_code,
@@ -126,7 +126,7 @@ pub async fn create_order_from_cart(
             created_at
         "#,
     )
-    .bind(customer_id)
+    .bind(user_id)
     .bind(daily_no)
     .bind(&order_code)
     .bind(total_price)
@@ -210,7 +210,7 @@ pub async fn reject_order(pool: &PgPool, order_id: Uuid) -> Result<()> {
 
 async fn lock_confirming_cart(
     tx: &mut Transaction<'_, Postgres>,
-    customer_id: Uuid,
+    user_id: Uuid,
     cart_id: Uuid,
 ) -> Result<()> {
     // carts.status is expected: 'active' | 'confirming' | 'locked'
@@ -221,13 +221,13 @@ async fn lock_confirming_cart(
         SET status = 'locked',
             updated_at = NOW()
         WHERE id = $1
-          AND customer_id = $2
+          AND user_id = $2
           AND status = 'confirming'
         RETURNING id
         "#,
     )
     .bind(cart_id)
-    .bind(customer_id)
+    .bind(user_id)
     .fetch_optional(&mut **tx)
     .await?;
 

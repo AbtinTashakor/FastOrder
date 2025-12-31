@@ -17,7 +17,7 @@ pub struct OrderItem {
 #[derive(Debug, Clone)]
 pub struct Order {
     pub id: Uuid,
-    pub customer_id: Uuid,
+    pub user_id: Uuid,
     pub items: Vec<OrderItem>,
     pub total_price: i64,
     pub status: OrderStatus,

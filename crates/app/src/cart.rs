@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Cart {
-    pub customer_id: Uuid,
+    pub user_id: Uuid,
     pub items: HashMap<Uuid, CartItem>, // menu_item_id -> item
     pub locked: bool,
 }
@@ -15,9 +15,9 @@ pub struct CartItem {
 }
 
 impl Cart {
-    pub fn new(customer_id: Uuid) -> Self {
+    pub fn new(user_id: Uuid) -> Self {
         Self {
-            customer_id,
+            user_id,
             items: HashMap::new(),
             locked: false,
         }

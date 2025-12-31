@@ -1,9 +1,13 @@
 use sqlx::PgPool;
 use std::env;
 
+use app::users::services::UserService;
+use db::user_repo::PgUserRepo;
+
 #[derive(Clone)]
 pub struct BotContext {
-    pub db: PgPool,
+    pub db: PgPool, // 👈 فعلاً نگه می‌داریم
+    pub user_service: UserService<PgUserRepo>, // 👈 جدید
 }
 
 impl BotContext {
@@ -11,8 +15,15 @@ impl BotContext {
         let database_url = env::var("DATABASE_URL")
             .expect("DATABASE_URL must be set");
 
-        let db = PgPool::connect(&database_url).await?;
+        let pool = PgPool::connect(&database_url).await?;
 
-        Ok(Self { db })
+        // repo + service برای auth
+        let user_repo = PgUserRepo::new(pool.clone());
+        let user_service = UserService::new(user_repo);
+
+        Ok(Self {
+            db: pool,
+            user_service,
+        })
     }
 }

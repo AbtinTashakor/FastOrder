@@ -5,7 +5,9 @@ use crate::callbacks::cart::handle_cart_action;
 use crate::context::BotContext;
 use crate::keyboards::{order_entry_keyboard, request_phone_keyboard};
 use crate::views::cart_view::render_cart_view;
-use db::customer_repo;
+
+use app::users::auth_error::AuthError;
+use app::users::phone::normalize_phone;
 
 const WELCOME_TEXT: &str = "👋 خوش اومدی به FastOrder!\nسفارش سریع، بدون تماس تلفنی.";
 
@@ -15,92 +17,93 @@ pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> Response
     /* ─────────────────────────────
      * /start
      * ───────────────────────────── */
-    if let Some(text) = msg.text() {
-        if text == "/start" {
-            // پیام خوش‌آمد
-            bot.send_message(chat_id, WELCOME_TEXT).await?;
+    if msg.text() == Some("/start") {
+        bot.send_message(chat_id, WELCOME_TEXT).await?;
 
-            let user_id = match msg.from.as_ref() {
-                Some(u) => u.id.0 as i64,
-                None => return Ok(()),
-            };
+        let telegram_id = match msg.from.as_ref() {
+            Some(u) => u.id.0 as i64,
+            None => return Ok(()),
+        };
 
-            match customer_repo::find_by_telegram_id(&ctx.db, user_id).await {
-                Ok(Some(_)) => {
-                    // قبلاً احراز شده
-                    bot.send_message(chat_id, "برای شروع سفارش، روی «🛒 سفارش جدید» بزن 👇")
-                        .reply_markup(order_entry_keyboard())
-                        .await?;
-                }
-                Ok(None) => {
-                    // احراز نشده
-                    bot.send_message(
-                        chat_id,
-                        "برای استفاده از سرویس، لطفاً شماره تلفن خودت رو ارسال کن 👇",
-                    )
-                    .reply_markup(request_phone_keyboard())
+        match ctx.user_service.is_verified_customer(telegram_id).await {
+            Ok(true) => {
+                bot.send_message(chat_id, "برای شروع سفارش، روی «🛒 سفارش جدید» بزن 👇")
+                    .reply_markup(order_entry_keyboard())
                     .await?;
-                }
-                Err(err) => {
-                    log::error!("start lookup failed: {:?}", err);
-                    bot.send_message(chat_id, "❌ خطایی رخ داد").await?;
-                }
             }
 
-            return Ok(());
+            Ok(false) => {
+                bot.send_message(
+                    chat_id,
+                    "برای استفاده از سرویس، لطفاً شماره تلفن خودت رو ارسال کن 👇",
+                )
+                .reply_markup(request_phone_keyboard())
+                .await?;
+            }
+
+            Err(err) => {
+                log::error!("start auth check failed: {:?}", err);
+                bot.send_message(chat_id, "❌ خطایی رخ داد").await?;
+            }
         }
+
+        return Ok(());
     }
 
     /* ─────────────────────────────
      * Contact (احراز هویت)
      * ───────────────────────────── */
     if let Some(contact) = msg.contact() {
-        log::info!(
-            "📱 Contact received | raw phone_number = '{}'",
-            contact.phone_number
-        );
-
         let phone = match normalize_phone(&contact.phone_number) {
             Some(p) => p,
             None => {
-                bot.send_message(msg.chat.id, "❌ شماره تلفن نامعتبر است")
+                bot.send_message(chat_id, "❌ شماره تلفن نامعتبر است")
                     .await?;
                 return Ok(());
             }
         };
 
-        let user_id = match msg.from.as_ref() {
+        let telegram_id = match msg.from.as_ref() {
             Some(u) => u.id.0 as i64,
             None => return Ok(()),
         };
 
-        match customer_repo::find_by_phone(&ctx.db, &phone).await {
-            Ok(Some(customer)) => {
-                if let Err(err) =
-                    customer_repo::verify_and_bind_telegram(&ctx.db, customer.id, user_id).await
-                {
-                    log::error!("verify failed: {:?}", err);
-                    bot.send_message(chat_id, "❌ خطا در احراز هویت").await?;
-                    return Ok(());
-                }
+        let username = msg.from.as_ref().and_then(|u| u.username.as_deref());
+        let full_name = msg.from.as_ref().map(|u| u.first_name.as_str());
 
-                // حذف کیبورد ارسال شماره
+        match ctx
+            .user_service
+            .verify_contact_as_customer(telegram_id, username, full_name, &phone)
+            .await
+        {
+            Ok(user) => {
                 bot.send_message(chat_id, "✅ احراز هویت با موفقیت انجام شد")
                     .reply_markup(KeyboardRemove::new())
                     .await?;
 
-                // نمایش دکمه سفارش جدید
-                bot.send_message(chat_id, "برای شروع سفارش، روی «🛒 سفارش جدید» بزن 👇")
-                    .reply_markup(order_entry_keyboard())
+                // مستقیم وارد منو شو
+                send_menu(&bot, &ctx, chat_id, user.id).await?;
+            }
+
+            Err(AuthError::PhoneNotRegistered) => {
+                bot.send_message(
+                    chat_id,
+                    "❌ شماره شما در سیستم ثبت نشده است.\n\
+                     لطفاً با رستوران تماس بگیرید.",
+                )
+                .reply_markup(KeyboardRemove::new())
+                .await?;
+            }
+
+            Err(AuthError::InvalidPhone) => {
+                bot.send_message(chat_id, "❌ شماره تلفن نامعتبر است")
+                    .reply_markup(KeyboardRemove::new())
                     .await?;
             }
-            Ok(None) => {
-                bot.send_message(chat_id, "❌ شماره شما ثبت نشده است")
-                    .await?;
-            }
+
             Err(err) => {
                 log::error!("contact auth failed: {:?}", err);
-                bot.send_message(chat_id, "❌ خطایی رخ داد").await?;
+                bot.send_message(chat_id, "❌ خطا در احراز هویت").await?;
             }
         }
 
@@ -110,77 +113,62 @@ pub async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> Response
     /* ─────────────────────────────
      * 🛒 سفارش جدید
      * ───────────────────────────── */
-    if let Some(text) = msg.text() {
-        if text == "🛒 سفارش جدید" {
-            let user_id = match msg.from.as_ref() {
-                Some(u) => u.id.0 as i64,
-                None => return Ok(()),
-            };
+    if msg.text() == Some("🛒 سفارش جدید") {
+        let telegram_id = match msg.from.as_ref() {
+            Some(u) => u.id.0 as i64,
+            None => return Ok(()),
+        };
 
-            let customer = match customer_repo::find_by_telegram_id(&ctx.db, user_id).await {
-                Ok(Some(c)) => c,
-                Ok(None) => {
-                    bot.send_message(chat_id, "❌ ابتدا باید احراز هویت شوید")
-                        .reply_markup(request_phone_keyboard())
-                        .await?;
-                    return Ok(());
-                }
-                Err(err) => {
-                    log::error!("order entry lookup failed: {:?}", err);
-                    bot.send_message(chat_id, "❌ خطایی رخ داد").await?;
-                    return Ok(());
-                }
-            };
-
-            // جمع‌کردن ReplyKeyboard
-            bot.send_message(
-                chat_id,
-                "👇 منو اینجاست\nبا دکمه‌های + و − انتخاب کن\nسفارشت بالا، به‌صورت لحظه‌ای نشون داده می‌شه\nوقتی تموم شدی، روی «✅ تکمیل سفارش» بزن",
-            )
-            .reply_markup(KeyboardRemove::new())
-            .await?;
-
-            match render_cart_view(&ctx.db, customer.id).await {
-                Ok((text, keyboard)) => {
-                    bot.send_message(chat_id, text)
-                        .reply_markup(keyboard)
-                        .await?;
-                }
-                Err(err) => {
-                    log::error!("render cart failed: {:?}", err);
-                    bot.send_message(chat_id, "❌ خطا در نمایش منو").await?;
-                }
+        let user = match ctx
+            .user_service
+            .get_verified_user_by_telegram(telegram_id)
+            .await
+        {
+            Ok(u) => u,
+            Err(_) => {
+                bot.send_message(chat_id, "❌ ابتدا باید احراز هویت شوید")
+                    .reply_markup(request_phone_keyboard())
+                    .await?;
+                return Ok(());
             }
+        };
 
-            return Ok(());
-        }
+        send_menu(&bot, &ctx, chat_id, user.id).await?;
+        return Ok(());
     }
 
     Ok(())
 }
 
-/// Normalize Iranian phone numbers to +989XXXXXXXXX
-fn normalize_phone(raw: &str) -> Option<String> {
-    // 1) remove everything except digits
-    let mut digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
+async fn send_menu(
+    bot: &Bot,
+    ctx: &BotContext,
+    chat_id: ChatId,
+    user_id: uuid::Uuid,
+) -> ResponseResult<()> {
+    bot.send_message(
+        chat_id,
+        "👇 منو اینجاست\n\
+         با دکمه‌های + و − انتخاب کن\n\
+         سفارشت بالا، به‌صورت لحظه‌ای نشون داده می‌شه\n\
+         وقتی تموم شدی، روی «✅ تکمیل سفارش» بزن",
+    )
+    .reply_markup(KeyboardRemove::new())
+    .await?;
 
-    // 2) normalize prefixes
-    if digits.starts_with("0098") {
-        digits = digits.trim_start_matches("0098").to_string();
-    } else if digits.starts_with("98") {
-        digits = digits.trim_start_matches("98").to_string();
-    } else if digits.starts_with("0") {
-        digits = digits.trim_start_matches('0').to_string();
+    match render_cart_view(&ctx.db, user_id).await {
+        Ok((text, keyboard)) => {
+            bot.send_message(chat_id, text)
+                .reply_markup(keyboard)
+                .await?;
+        }
+        Err(err) => {
+            log::error!("render_cart_view failed: {:?}", err);
+            bot.send_message(chat_id, "❌ خطا در نمایش منو").await?;
+        }
     }
 
-    // 3) after normalization we expect exactly 10 digits (9XXXXXXXXX)
-    if digits.len() != 10 {
-        log::warn!("invalid phone number after normalize: raw='{}'", raw);
-        return None;
-    }
-
-    // 4) final canonical form
-    Some(format!("+98{}", digits))
+    Ok(())
 }
 
 pub async fn handle_callback(bot: Bot, q: CallbackQuery, ctx: BotContext) -> ResponseResult<()> {

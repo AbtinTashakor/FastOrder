@@ -17,9 +17,9 @@ fn category_emoji(title: &str) -> &str {
 
 pub async fn render_cart_view(
     pool: &sqlx::PgPool,
-    customer_id: Uuid,
+    user_id: Uuid,
 ) -> anyhow::Result<(String, InlineKeyboardMarkup)> {
-    let cart = cart_repo::get_or_create_active_cart(pool, customer_id).await?;
+    let cart = cart_repo::get_or_create_active_cart(pool, user_id).await?;
     let cart_items = cart_repo::list_cart_items(pool, cart.id).await?;
     let menu_items = menu_repo::list_available_items(pool).await?;
     // ⬆️ فرض: menu_items به ترتیب category مرتب شده
