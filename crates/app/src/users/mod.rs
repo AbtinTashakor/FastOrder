@@ -1,4 +1,4 @@
 pub mod types;
-pub mod services;
+pub mod service;
 pub mod phone;
-pub mod auth_error;
+pub mod error;

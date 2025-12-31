@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use app::users::services::UserRepo;
-use app::users::types::{Role, User};
+
+use app::users::{service::UserRepo, types::{Role, User}};
 
 #[derive(Clone)]
 pub struct PgUserRepo {

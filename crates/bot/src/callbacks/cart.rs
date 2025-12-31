@@ -1,12 +1,13 @@
 use anyhow::Result;
+use app::cart::service::CartState;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardMarkup, MaybeInaccessibleMessage};
 use uuid::Uuid;
 
 use crate::context::BotContext;
-use crate::views::cart_view::{confirming_keyboard, render_cart_view, render_confirming_view};
-
-use db::{cart_repo, order_repo};
+use crate::views::cart_view::{
+    confirming_keyboard, render_cart_by_state, render_confirming_view, CartRenderResult,
+};
 
 pub async fn handle_cart_action(
     bot: Bot,
@@ -39,53 +40,85 @@ pub async fn handle_cart_action(
 
     let action = parse_action(data);
 
+    // 🔑 resolve cart_id once
+    let cart_state = ctx.cart_service.resolve_cart_state(user.id).await?;
+
     match action {
+        /* ───────────── Editing (active cart only) ───────────── */
         CartAction::Inc(item_id) => {
-            let cart =
-                cart_repo::get_or_create_active_cart(&ctx.db, user.id).await?;
-            cart_repo::inc_item(&ctx.db, cart.id, item_id).await?;
+            let CartState::Active(cart_id) = cart_state else {
+                bot.answer_callback_query(q.id).await?;
+                return Ok(());
+            };
+
+            ctx.cart_service
+                .inc_item_by_cart(cart_id, item_id)
+                .await?;
             render_and_edit(&bot, &ctx, msg, user.id).await?;
         }
 
         CartAction::Dec(item_id) => {
-            let cart =
-                cart_repo::get_or_create_active_cart(&ctx.db, user.id).await?;
-            cart_repo::dec_item(&ctx.db, cart.id, item_id).await?;
+            let CartState::Active(cart_id) = cart_state else {
+                bot.answer_callback_query(q.id).await?;
+                return Ok(());
+            };
+
+            ctx.cart_service
+                .dec_item_by_cart(cart_id, item_id)
+                .await?;
             render_and_edit(&bot, &ctx, msg, user.id).await?;
         }
 
         CartAction::Reset => {
-            let cart =
-                cart_repo::get_or_create_active_cart(&ctx.db, user.id).await?;
-            cart_repo::reset_cart(&ctx.db, cart.id).await?;
+            let CartState::Active(cart_id) = cart_state else {
+                bot.answer_callback_query(q.id).await?;
+                return Ok(());
+            };
+
+            ctx.cart_service.reset_by_cart(cart_id).await?;
             render_and_edit(&bot, &ctx, msg, user.id).await?;
         }
 
+        /* ───────────── Flow: active → confirming ───────────── */
         CartAction::Complete => {
-            let cart =
-                cart_repo::get_or_create_active_cart(&ctx.db, user.id).await?;
-            cart_repo::mark_confirming(&ctx.db, cart.id).await?;
+            let CartState::Active(cart_id) = cart_state else {
+                bot.answer_callback_query(q.id).await?;
+                return Ok(());
+            };
 
-            let text = render_confirming_view(&ctx.db, cart.id).await?;
+            ctx.cart_service.mark_confirming(cart_id).await?;
+
+            let text = render_confirming_view(&ctx, cart_id).await?;
 
             bot.edit_message_text(msg.chat.id, msg.id, text)
                 .reply_markup(confirming_keyboard())
                 .await?;
         }
 
+        /* ───────────── Flow: confirming → active ───────────── */
         CartAction::Edit => {
-            let cart =
-                cart_repo::get_confirming_cart(&ctx.db, user.id).await?;
-            cart_repo::mark_active(&ctx.db, cart.id).await?;
+            let CartState::Confirming(cart_id) = cart_state else {
+                bot.answer_callback_query(q.id).await?;
+                return Ok(());
+            };
+
+            ctx.cart_service.mark_active(cart_id).await?;
             render_and_edit(&bot, &ctx, msg, user.id).await?;
         }
 
+        /* ───────────── Checkout ───────────── */
         CartAction::Confirm => {
-            let cart =
-                cart_repo::get_confirming_cart(&ctx.db, user.id).await?;
-            let order =
-                order_repo::create_order_from_cart(&ctx.db, user.id, cart.id)
-                    .await?;
+            let CartState::Confirming(cart_id) = cart_state else {
+                bot.answer_callback_query(q.id).await?;
+                return Ok(());
+            };
+
+            let order = db::order_repo::create_order_from_cart(
+                &ctx.db,
+                user.id,
+                cart_id,
+            )
+            .await?;
 
             let text = format!(
                 "✅ سفارش شما ثبت شد\n\n🧾 کد سفارش: FO-{}",
@@ -103,6 +136,8 @@ pub async fn handle_cart_action(
     bot.answer_callback_query(q.id).await?;
     Ok(())
 }
+
+/* ───────────────────────────── */
 
 #[derive(Debug)]
 enum CartAction {
@@ -123,8 +158,14 @@ fn parse_action(data: &str) -> CartAction {
     }
 
     match parts.next().unwrap_or("") {
-        "inc" => parse_uuid(parts.next()).map(CartAction::Inc).unwrap_or(CartAction::Noop),
-        "dec" => parse_uuid(parts.next()).map(CartAction::Dec).unwrap_or(CartAction::Noop),
+        "inc" => parse_uuid(parts.next())
+            .map(CartAction::Inc)
+            .unwrap_or(CartAction::Noop),
+
+        "dec" => parse_uuid(parts.next())
+            .map(CartAction::Dec)
+            .unwrap_or(CartAction::Noop),
+
         "reset" => CartAction::Reset,
         "complete" => CartAction::Complete,
         "edit" => CartAction::Edit,
@@ -142,17 +183,33 @@ async fn render_and_edit(
     ctx: &BotContext,
     msg: &Message,
     user_id: Uuid,
-) -> Result<()> {
-    let (text, keyboard) =
-        render_cart_view(&ctx.db, user_id).await?;
+) -> anyhow::Result<()> {
+    let render = render_cart_by_state(ctx, user_id).await?;
 
-    if msg.text().map(|t| t == text).unwrap_or(false) {
-        return Ok(());
+    let edit_result = match render {
+        CartRenderResult::Active { text, keyboard } => {
+            bot.edit_message_text(msg.chat.id, msg.id, text)
+                .reply_markup(keyboard)
+                .await
+        }
+
+        CartRenderResult::Confirming { text, keyboard } => {
+            bot.edit_message_text(msg.chat.id, msg.id, text)
+                .reply_markup(keyboard)
+                .await
+        }
+    };
+
+    match edit_result {
+        Ok(_) => Ok(()),
+        Err(err) if is_message_not_modified(&err) => Ok(()),
+        Err(err) => Err(err.into()),
     }
+}
 
-    bot.edit_message_text(msg.chat.id, msg.id, text)
-        .reply_markup(keyboard)
-        .await?;
-
-    Ok(())
+fn is_message_not_modified(err: &teloxide::RequestError) -> bool {
+    matches!(
+        err,
+        teloxide::RequestError::Api(teloxide::ApiError::MessageNotModified)
+    )
 }

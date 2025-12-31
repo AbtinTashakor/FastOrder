@@ -4,7 +4,10 @@ use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 use thousands::Separable;
 use uuid::Uuid;
 
-use db::{cart_repo, menu_repo};
+use app::cart::{service::CartState, types::CartView};
+use db::menu_repo;
+
+use crate::context::BotContext;
 
 fn category_emoji(title: &str) -> &str {
     match title {
@@ -15,54 +18,54 @@ fn category_emoji(title: &str) -> &str {
     }
 }
 
+/// ─────────────────────────────
+/// Active cart view (editable)
+/// ─────────────────────────────
 pub async fn render_cart_view(
-    pool: &sqlx::PgPool,
-    user_id: Uuid,
+    ctx: &BotContext,
+    cart_id: Uuid,
 ) -> anyhow::Result<(String, InlineKeyboardMarkup)> {
-    let cart = cart_repo::get_or_create_active_cart(pool, user_id).await?;
-    let cart_items = cart_repo::list_cart_items(pool, cart.id).await?;
-    let menu_items = menu_repo::list_available_items(pool).await?;
-    // ⬆️ فرض: menu_items به ترتیب category مرتب شده
+    let CartView { items, total_price } = ctx.cart_service.get_cart_view(cart_id).await?;
 
-    let cart_map: HashMap<Uuid, i32> = cart_items
+    let menu_items = menu_repo::list_available_items(&ctx.db).await?;
+
+    let cart_map: HashMap<Uuid, i32> = items
         .into_iter()
         .map(|i| (i.menu_item_id, i.quantity))
         .collect();
 
-    let mut total: i64 = 0;
-    let mut text = String::new();
-    let mut keyboard: Vec<Vec<InlineKeyboardButton>> = Vec::new();
-
-    // ---------- متن بالای پیام ----------
-    text.push_str("🛒 سفارش شما:\n");
+    let mut text = String::from("🛒 سفارش شما:\n");
+    let mut keyboard = Vec::new();
 
     for item in &menu_items {
         if let Some(qty) = cart_map.get(&item.id) {
             if *qty > 0 {
-                total += (*qty as i64) * item.price;
                 text.push_str(&format!("• {} × {}\n", item.title, qty));
             }
         }
     }
 
-    if total == 0 {
+    if total_price == 0 {
         text.push_str("— هنوز چیزی انتخاب نکردی —\n");
     }
 
     text.push_str(&format!(
         "\n💰 جمع کل: {} تومان\n\n",
-        total.separate_with_commas()
+        total_price.separate_with_commas()
     ));
 
     // ---------- کیبورد ----------
     let mut last_category_id: Option<Uuid> = None;
 
     for item in menu_items {
-        // --- header کتگوری (وقتی عوض می‌شه) ---
+        // header کتگوری
         if last_category_id != Some(item.category_id) {
-            let emoji = category_emoji(&item.category_title);
             keyboard.push(vec![InlineKeyboardButton::callback(
-                format!("{} {}", emoji, item.category_title),
+                format!(
+                    "{} {}",
+                    category_emoji(&item.category_title),
+                    item.category_title
+                ),
                 "noop".to_string(),
             )]);
             last_category_id = Some(item.category_id);
@@ -81,13 +84,11 @@ pub async fn render_cart_view(
             format!("{} — {}", item.title, item.price.separate_with_commas())
         };
 
-        // دکمه بزرگ آیتم
         keyboard.push(vec![InlineKeyboardButton::callback(
             label,
             "noop".to_string(),
         )]);
 
-        // دکمه‌های کنترل
         let mut controls = Vec::new();
 
         if qty > 0 {
@@ -107,7 +108,7 @@ pub async fn render_cart_view(
         keyboard.push(controls);
     }
 
-    if total > 0 {
+    if total_price > 0 {
         keyboard.push(vec![
             InlineKeyboardButton::callback("✅ تکمیل سفارش", "cart:complete".to_string()),
             InlineKeyboardButton::callback("🔄 سفارش جدید", "cart:reset".to_string()),
@@ -117,45 +118,84 @@ pub async fn render_cart_view(
     Ok((text, InlineKeyboardMarkup::new(keyboard)))
 }
 
-use sqlx::PgPool;
-
-
-
-pub async fn render_confirming_view(pool: &PgPool, cart_id: Uuid) -> anyhow::Result<String> {
-    let items = cart_repo::list_cart_items(pool, cart_id).await?;
+/// ─────────────────────────────
+/// Confirming cart view (read-only)
+/// ─────────────────────────────
+pub async fn render_confirming_view(
+    ctx: &BotContext,
+    cart_id: Uuid,
+) -> anyhow::Result<String> {
+    let CartView {
+        items,
+        total_price,
+    } = ctx.cart_service.get_cart_view(cart_id).await?;
 
     let mut lines = Vec::new();
-    let mut total: i64 = 0;
 
     for item in items {
         let line_total = item.price_snapshot * item.quantity as i64;
-        total += line_total;
-
         lines.push(format!(
             "• {} × {} — {} تومان",
-            item.title,  
+            item.title,
             item.quantity,
             line_total.separate_with_commas()
         ));
     }
 
-    let text = format!(
+    Ok(format!(
         "🧾 *خلاصه سفارش شما:*\n\n{}\n\n\
          ───────────────\n\
          💰 *جمع کل:* {} تومان\n\n\
          ❓ آیا سفارش نهایی شود؟",
         lines.join("\n"),
-        total.separate_with_commas()
-    );
-
-    Ok(text)
+        total_price.separate_with_commas()
+    ))
 }
 
+
+pub async fn render_cart_by_state(
+    ctx: &BotContext,
+    user_id: Uuid,
+) -> anyhow::Result<CartRenderResult> {
+    match ctx.cart_service.resolve_cart_state(user_id).await? {
+        CartState::Active(cart_id) => {
+            let (text, keyboard) = render_cart_view(ctx, cart_id).await?;
+            Ok(CartRenderResult::Active { text, keyboard })
+        }
+
+        CartState::Confirming(cart_id) => {
+            let text = render_confirming_view(ctx, cart_id).await?;
+            Ok(CartRenderResult::Confirming {
+                text,
+                keyboard: confirming_keyboard(),
+            })
+        }
+
+        CartState::New => {
+            // فقط تضمین می‌کنیم cart فعال ساخته شود
+            let cart = ctx.cart_service.complete_new_cart(user_id).await?;
+
+            let (text, keyboard) = render_cart_view(ctx, cart.id).await?;
+            Ok(CartRenderResult::Active { text, keyboard })
+        }
+    }
+}
+
+
 pub fn confirming_keyboard() -> InlineKeyboardMarkup {
-    InlineKeyboardMarkup::new(vec![
-        vec![
-            InlineKeyboardButton::callback("✏️ ویرایش سفارش", "cart:edit"),
-            InlineKeyboardButton::callback("✅ تأیید نهایی", "cart:confirm"),
-        ],
-    ])
+    InlineKeyboardMarkup::new(vec![vec![
+        InlineKeyboardButton::callback("✏️ ویرایش سفارش", "cart:edit"),
+        InlineKeyboardButton::callback("✅ تأیید نهایی", "cart:confirm"),
+    ]])
+}
+
+pub enum CartRenderResult {
+    Active {
+        text: String,
+        keyboard: InlineKeyboardMarkup,
+    },
+    Confirming {
+        text: String,
+        keyboard: InlineKeyboardMarkup,
+    },
 }

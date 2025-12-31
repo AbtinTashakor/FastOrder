@@ -1,8 +1,10 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
+use crate::users::error::AuthError;
+
 use super::types::{Role, User};
-use crate::users::auth_error::AuthError;
+
 
 #[async_trait]
 pub trait UserRepo: Send + Sync {

@@ -1,12 +1,12 @@
+use app::users::error::AuthError;
 use teloxide::prelude::*;
 use teloxide::types::KeyboardRemove;
 
 use crate::callbacks::cart::handle_cart_action;
 use crate::context::BotContext;
 use crate::keyboards::{order_entry_keyboard, request_phone_keyboard};
-use crate::views::cart_view::render_cart_view;
+use crate::views::cart_view::{render_cart_by_state, CartRenderResult};
 
-use app::users::auth_error::AuthError;
 use app::users::phone::normalize_phone;
 
 const WELCOME_TEXT: &str = "👋 خوش اومدی به FastOrder!\nسفارش سریع، بدون تماس تلفنی.";
@@ -156,15 +156,25 @@ async fn send_menu(
     .reply_markup(KeyboardRemove::new())
     .await?;
 
-    match render_cart_view(&ctx.db, user_id).await {
-        Ok((text, keyboard)) => {
-            bot.send_message(chat_id, text)
-                .reply_markup(keyboard)
-                .await?;
-        }
+    match render_cart_by_state(&ctx, user_id).await {
+        Ok(render) => match render {
+            CartRenderResult::Active { text, keyboard } => {
+                bot.send_message(chat_id, text)
+                    .reply_markup(keyboard)
+                    .await?;
+            }
+
+            CartRenderResult::Confirming { text, keyboard } => {
+                bot.send_message(chat_id, text)
+                    .reply_markup(keyboard)
+                    .await?;
+            }
+        },
+
         Err(err) => {
-            log::error!("render_cart_view failed: {:?}", err);
-            bot.send_message(chat_id, "❌ خطا در نمایش منو").await?;
+            log::error!("render_cart_by_state failed: {:?}", err);
+            bot.send_message(chat_id, "❌ خطا در نمایش سبد خرید")
+                .await?;
         }
     }
 
