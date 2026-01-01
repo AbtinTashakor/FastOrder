@@ -4,8 +4,8 @@ use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 use thousands::Separable;
 use uuid::Uuid;
 
-use app::cart::{service::CartState, types::CartView};
-use db::menu_repo;
+use app::cart::{service::CartState, CartView};
+
 
 use crate::context::BotContext;
 
@@ -27,7 +27,7 @@ pub async fn render_cart_view(
 ) -> anyhow::Result<(String, InlineKeyboardMarkup)> {
     let CartView { items, total_price } = ctx.cart_service.get_cart_view(cart_id).await?;
 
-    let menu_items = menu_repo::list_available_items(&ctx.db).await?;
+    let menu_items = ctx.menu_service.get_menu_items().await?;
 
     let cart_map: HashMap<Uuid, i32> = items
         .into_iter()
@@ -121,14 +121,8 @@ pub async fn render_cart_view(
 /// ─────────────────────────────
 /// Confirming cart view (read-only)
 /// ─────────────────────────────
-pub async fn render_confirming_view(
-    ctx: &BotContext,
-    cart_id: Uuid,
-) -> anyhow::Result<String> {
-    let CartView {
-        items,
-        total_price,
-    } = ctx.cart_service.get_cart_view(cart_id).await?;
+pub async fn render_confirming_view(ctx: &BotContext, cart_id: Uuid) -> anyhow::Result<String> {
+    let CartView { items, total_price } = ctx.cart_service.get_cart_view(cart_id).await?;
 
     let mut lines = Vec::new();
 
@@ -151,7 +145,6 @@ pub async fn render_confirming_view(
         total_price.separate_with_commas()
     ))
 }
-
 
 pub async fn render_cart_by_state(
     ctx: &BotContext,
@@ -180,7 +173,6 @@ pub async fn render_cart_by_state(
         }
     }
 }
-
 
 pub fn confirming_keyboard() -> InlineKeyboardMarkup {
     InlineKeyboardMarkup::new(vec![vec![

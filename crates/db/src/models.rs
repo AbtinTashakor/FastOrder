@@ -50,7 +50,7 @@ pub struct OrderRow {
     pub status: String, // 'pending' | 'accepted' | 'rejected'
     pub prep_time_minutes: Option<i32>,
     pub created_at: NaiveDateTime,
-    pub daily_no: i32,
+    pub order_code: String,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -58,4 +58,94 @@ pub struct OrderItemSnapshotRow {
     pub title_snapshot: String,
     pub price_snapshot: i64,
     pub quantity: i32,
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    Admin,
+    Operator,
+    Customer,
+}
+
+#[derive(Debug, Clone)]
+pub struct User {
+    pub id: Uuid,
+    pub telegram_id: i64,
+    pub telegram_username: Option<String>,
+    pub phone: Option<String>,
+    pub full_name: Option<String>,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CartStatus {
+    Active,
+    Confirming,
+    Locked
+}
+
+#[derive(Debug, Clone)]
+pub struct Cart {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub status: CartStatus,
+}
+
+#[derive(Debug)]
+pub struct CartItemView {
+    pub menu_item_id: Uuid,
+    pub title: String,
+    pub quantity: i32,
+    pub price_snapshot: i64,
+}
+
+#[derive(Debug)]
+pub struct CartView {
+    pub items: Vec<CartItemView>,
+    pub total_price: i64,
+}
+
+
+impl Role {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Role::Admin => "admin",
+            Role::Operator => "operator",
+            Role::Customer => "customer",
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub enum AuthResult {
+    AlreadyVerified {
+        user_id: Uuid,
+    },
+    Verified {
+        user_id: Uuid,
+    },
+    PhoneNotFound,
+    InvalidPhone,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct MenuCategory {
+    pub id: Uuid,
+    pub title: String,
+    pub position: i32,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct MenuItem {
+    pub id: Uuid,
+    pub category_id: Uuid,
+    pub title: String,
+    pub price: i64,
+    pub is_available: bool,
+    pub category_title: String,
+    pub position: i32,
 }

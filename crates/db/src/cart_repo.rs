@@ -3,10 +3,23 @@ use async_trait::async_trait;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use app::cart::service::CartRepo;
-use app::cart::types::{Cart, CartItemView, CartStatus, CartView};
+use crate::models::{Cart, CartItemRow, CartItemView, CartRow, CartStatus, CartView};
 
-use crate::models::{CartItemRow, CartRow};
+#[async_trait]
+pub trait CartRepo: Send + Sync {
+    async fn find_active_cart(&self, user_id: Uuid) -> anyhow::Result<Option<Cart>>;
+    async fn create_active_cart(&self, user_id: Uuid) -> anyhow::Result<Cart>;
+    async fn find_confirming_cart(&self, user_id: Uuid) -> anyhow::Result<Option<Cart>>;
+
+    async fn inc_item(&self, cart_id: Uuid, item_id: Uuid) -> anyhow::Result<()>;
+    async fn dec_item(&self, cart_id: Uuid, item_id: Uuid) -> anyhow::Result<()>;
+    async fn reset_cart(&self, cart_id: Uuid) -> anyhow::Result<()>;
+
+    async fn mark_confirming(&self, cart_id: Uuid) -> anyhow::Result<()>;
+    async fn mark_active(&self, cart_id: Uuid) -> anyhow::Result<()>;
+
+    async fn get_cart_view(&self, cart_id: Uuid) -> anyhow::Result<CartView>;
+}
 
 /// ─────────────────────────────
 /// Pg adapter
@@ -282,9 +295,6 @@ impl CartRepo for PgCartRepo {
             })
             .collect();
 
-        Ok(CartView {
-            items,
-            total_price,
-        })
+        Ok(CartView { items, total_price })
     }
 }

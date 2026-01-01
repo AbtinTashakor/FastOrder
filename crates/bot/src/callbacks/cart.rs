@@ -121,8 +121,8 @@ pub async fn handle_cart_action(
             .await?;
 
             let text = format!(
-                "✅ سفارش شما ثبت شد\n\n🧾 کد سفارش: FO-{}",
-                order.daily_no
+                "✅ سفارش شما ثبت شد\n\n🧾 کد سفارش: {}",
+                order.order_code
             );
 
             bot.edit_message_text(msg.chat.id, msg.id, text)

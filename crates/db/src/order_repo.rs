@@ -93,7 +93,7 @@ pub async fn create_order_from_cart(
     .await?;
 
     let daily_no = counter.last_no;
-    let order_code = format!("FO-{}", daily_no);
+    let order_code = format!("FO-{}-{}", chrono::Local::now().format("%Y%m%d"), daily_no);
 
     // 6) insert order
     let order = sqlx::query_as::<_, OrderRow>(

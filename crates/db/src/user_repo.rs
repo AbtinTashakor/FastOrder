@@ -4,7 +4,23 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 
-use app::users::{service::UserRepo, types::{Role, User}};
+use crate::models::{Role, User};
+
+#[async_trait]
+pub trait UserRepo: Send + Sync {
+    async fn find_by_telegram_id(&self, telegram_id: i64) -> Result<Option<User>>;
+    async fn find_by_phone(&self, phone: &str) -> Result<Option<User>>;
+    async fn bind_telegram(
+        &self,
+        user_id: Uuid,
+        telegram_id: i64,
+        telegram_username: Option<&str>,
+        full_name: Option<&str>,
+    ) -> Result<()>;
+    async fn set_phone_and_verify(&self, user_id: Uuid, phone: &str) -> Result<()>;
+    async fn assign_role(&self, user_id: Uuid, role: Role) -> Result<()>;
+    async fn has_role(&self, user_id: Uuid, role: Role) -> Result<bool>;
+}
 
 #[derive(Clone)]
 pub struct PgUserRepo {
@@ -68,7 +84,6 @@ impl UserRepo for PgUserRepo {
         }))
     }
 
-   
     async fn set_phone_and_verify(&self, user_id: Uuid, phone: &str) -> Result<()> {
         sqlx::query!(
             r#"

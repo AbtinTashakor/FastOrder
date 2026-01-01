@@ -8,3 +8,4 @@ anyhow = "1.0.100"
 async-trait = "0.1.89"
 thiserror = "2.0.17"
 uuid = "1.19.0"
+db = { path = "../db" }
