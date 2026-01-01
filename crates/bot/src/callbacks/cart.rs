@@ -1,8 +1,9 @@
 use anyhow::Result;
-use app::cart::service::CartState;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardMarkup, MaybeInaccessibleMessage};
 use uuid::Uuid;
+
+use app::services::cart::service::CartState;
 
 use crate::context::BotContext;
 use crate::views::cart_view::{

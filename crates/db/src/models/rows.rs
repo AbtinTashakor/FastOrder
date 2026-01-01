@@ -1,14 +1,15 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use uuid::Uuid;
 
 /* ================= DB Rows ================= */
-
-#[derive(sqlx::FromRow, Debug)]
-pub struct CustomerRow {
+#[derive(sqlx::FromRow)]
+pub struct UserRow {
     pub id: Uuid,
-    pub phone_number: String,
-    pub telegram_user_id: Option<i64>,
-    pub created_at: NaiveDateTime,
+    pub telegram_id: Option<i64>,
+    pub telegram_username: Option<String>,
+    pub phone: Option<String>,
+    pub full_name: Option<String>,
+    pub is_active: bool,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -44,15 +45,17 @@ pub struct CartItemRow {
     pub price_snapshot: i64,
 }
 
-#[derive(sqlx::FromRow, Debug)]
+#[derive(sqlx::FromRow)]
 pub struct OrderRow {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub order_day: NaiveDate,
+    pub daily_no: i32,
+    pub order_code: String,
     pub total_price: i64,
     pub status: String,
     pub prep_time_minutes: Option<i32>,
     pub created_at: NaiveDateTime,
-    pub order_code: String,
 }
 
 #[derive(sqlx::FromRow, Debug)]

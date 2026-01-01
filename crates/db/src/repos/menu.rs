@@ -1,7 +1,14 @@
+use anyhow::Result;
+use async_trait::async_trait;
 use sqlx::PgPool;
-use uuid::Uuid;
 
-use crate::models::{MenuItem, MenuItemRow};
+use crate::models::MenuItemRow;
+
+// app domain + policy
+use app::{
+    models::menu::MenuItem,
+    repos::menu::MenuRepo,
+};
 
 #[derive(Clone)]
 pub struct PgMenuRepo {
@@ -13,12 +20,9 @@ impl PgMenuRepo {
         Self { pool }
     }
 
-    /* ───────────────────── Queries ───────────────────── */
+    /* ───────────────────── Internal query ───────────────────── */
 
-    /// Returns all active menu items ordered by category position then item position
-    pub async fn list_available_items(
-        &self,
-    ) -> Result<Vec<MenuItem>, sqlx::Error> {
+    async fn list_available_items_inner(&self) -> Result<Vec<MenuItem>> {
         let rows: Vec<MenuItemRow> = sqlx::query_as!(
             MenuItemRow,
             r#"
@@ -43,6 +47,17 @@ impl PgMenuRepo {
     }
 }
 
+/* ───────────────────────────────────────────────
+   Trait implementation (Contract fulfillment)
+   ─────────────────────────────────────────────── */
+
+#[async_trait]
+impl MenuRepo for PgMenuRepo {
+    async fn list_available_items(&self) -> Result<Vec<MenuItem>> {
+        self.list_available_items_inner().await
+    }
+}
+
 /* ───────────────────── Mapping ───────────────────── */
 
 fn map_menu_item(row: MenuItemRow) -> MenuItem {
@@ -51,7 +66,7 @@ fn map_menu_item(row: MenuItemRow) -> MenuItem {
         category_id: row.category_id,
         title: row.title,
         price: row.price,
-        is_available: true, // derived from category.is_active
+        is_available: true, // چون فقط active ها query شدن
         category_title: row.category_title,
         position: row.position,
     }

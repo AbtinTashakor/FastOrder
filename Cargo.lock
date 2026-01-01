@@ -51,7 +51,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "db",
+ "chrono",
  "thiserror 2.0.17",
  "uuid",
 ]
@@ -338,6 +338,7 @@ name = "db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "app",
  "async-trait",
  "chrono",
  "dotenvy",

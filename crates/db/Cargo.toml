@@ -12,4 +12,4 @@ uuid = "1.19.0"
 chrono = "0.4.42"
 async-trait = "0.1.89"
 
-
+app = { path = "../app" }

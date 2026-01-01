@@ -1,10 +1,13 @@
-
+use crate::{
+    models::user::{Role, User},
+    repos::user::UserRepo,
+    services::users::error::AuthError,
+};
 use uuid::Uuid;
 
-use crate::users::error::AuthError;
-
-use db::{models::{Role, User}, user_repo::UserRepo};
-
+/// ─────────────────────────────
+/// User service (use-cases)
+/// ─────────────────────────────
 
 #[derive(Clone)]
 pub struct UserService<R: UserRepo + Clone> {
@@ -16,18 +19,15 @@ impl<R: UserRepo + Clone> UserService<R> {
         Self { repo }
     }
 
-
     /// Get verified customer by telegram id
     /// Used by bot before any cart/order action
-    pub async fn get_verified_user_by_telegram(
-        &self,
-        telegram_id: i64,
-    ) -> Result<User, AuthError> {
-        let user = match self.repo.find_by_telegram_id(telegram_id).await {
-            Ok(Some(u)) => u,
-            Ok(None) => return Err(AuthError::NotVerified),
-            Err(_) => return Err(AuthError::Internal),
-        };
+    pub async fn get_verified_user_by_telegram(&self, telegram_id: i64) -> Result<User, AuthError> {
+        let user = self
+            .repo
+            .find_by_telegram_id(telegram_id)
+            .await
+            .map_err(|_| AuthError::Internal)?
+            .ok_or(AuthError::NotVerified)?;
 
         let has_role = self
             .repo
@@ -42,15 +42,17 @@ impl<R: UserRepo + Clone> UserService<R> {
         Ok(user)
     }
 
-
     /// Check if telegram user is already a verified customer
     /// ❌ does NOT create user
     /// ❌ does NOT modify database
     pub async fn is_verified_customer(&self, telegram_id: i64) -> Result<bool, AuthError> {
-        let user = match self.repo.find_by_telegram_id(telegram_id).await {
-            Ok(Some(u)) => u,
-            Ok(None) => return Ok(false),
-            Err(_) => return Err(AuthError::Internal),
+        let Some(user) = self
+            .repo
+            .find_by_telegram_id(telegram_id)
+            .await
+            .map_err(|_| AuthError::Internal)?
+        else {
+            return Ok(false);
         };
 
         self.repo
@@ -69,11 +71,12 @@ impl<R: UserRepo + Clone> UserService<R> {
         phone: &str,
     ) -> Result<User, AuthError> {
         // 1️⃣ user must already exist by phone
-        let user = match self.repo.find_by_phone(phone).await {
-            Ok(Some(u)) => u,
-            Ok(None) => return Err(AuthError::PhoneNotRegistered),
-            Err(_) => return Err(AuthError::Internal),
-        };
+        let user = self
+            .repo
+            .find_by_phone(phone)
+            .await
+            .map_err(|_| AuthError::Internal)?
+            .ok_or(AuthError::PhoneNotRegistered)?;
 
         // 2️⃣ bind telegram
         self.repo

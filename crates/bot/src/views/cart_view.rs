@@ -4,8 +4,7 @@ use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 use thousands::Separable;
 use uuid::Uuid;
 
-use app::cart::{service::CartState, CartView};
-
+use app::{models::cart::CartView, services::cart::service::CartState};
 
 use crate::context::BotContext;
 

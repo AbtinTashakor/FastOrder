@@ -3,23 +3,27 @@ use std::env;
 use sqlx::PgPool;
 
 use app::{
-    cart::service::CartService,
-    menu::service::MenuService,
-    order::service::OrderService,
-    users::service::UserService,
+    services::{
+        users::service::UserService,
+        cart::service::CartService,
+        menu::service::MenuService,
+        order::service::OrderService,
+    },
 };
 
-use db::{
-    cart_repo::PgCartRepo, menu_repo::PgMenuRepo, order_repo, user_repo::PgUserRepo
+use db::repos::{
+    PgUserRepo,
+    PgCartRepo,
+    PgMenuRepo,
+    PgOrderRepo,
 };
 
 #[derive(Clone)]
 pub struct BotContext {
-   
     pub user_service: UserService<PgUserRepo>,
     pub cart_service: CartService<PgCartRepo>,
-    pub menu_service: MenuService,
-    pub order_service: OrderService,
+    pub menu_service: MenuService<PgMenuRepo>,
+    pub order_service: OrderService<PgOrderRepo>,
 }
 
 impl BotContext {
@@ -29,20 +33,20 @@ impl BotContext {
 
         let pool = PgPool::connect(&database_url).await?;
 
-        // ---------- users ----------
+        /* ───────────── Users ───────────── */
         let user_repo = PgUserRepo::new(pool.clone());
         let user_service = UserService::new(user_repo);
 
-        // ---------- cart ----------
+        /* ───────────── Cart ───────────── */
         let cart_repo = PgCartRepo::new(pool.clone());
         let cart_service = CartService::new(cart_repo);
 
-        // ---------- menu ----------
+        /* ───────────── Menu ───────────── */
         let menu_repo = PgMenuRepo::new(pool.clone());
         let menu_service = MenuService::new(menu_repo);
 
-        // ---------- order ----------
-        let order_repo = order_repo::PgOrderRepo::new(pool.clone());
+        /* ───────────── Order ───────────── */
+        let order_repo = PgOrderRepo::new(pool.clone());
         let order_service = OrderService::new(order_repo);
 
         Ok(Self {

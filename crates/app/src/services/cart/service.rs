@@ -1,18 +1,18 @@
-
-use db::cart_repo::CartRepo;
 use uuid::Uuid;
 
+use crate::{
+    models::cart::{Cart, CartView},
+    repos::cart::CartRepo,
+};
 
-use super::error::CartError;
-use db::models::{Cart, CartView};
-
+use crate::services::cart::error::CartError;
 
 #[derive(Clone)]
-pub struct CartService<R: CartRepo> {
+pub struct CartService<R: CartRepo + Clone> {
     repo: R,
 }
 
-impl<R: CartRepo> CartService<R> {
+impl<R: CartRepo + Clone> CartService<R> {
     pub fn new(repo: R) -> Self {
         Self { repo }
     }
@@ -38,11 +38,11 @@ impl<R: CartRepo> CartService<R> {
             return Ok(CartState::Confirming(cart.id));
         }
 
-        // locked یا اصلاً cart نداریم → سفارش جدید
         Ok(CartState::New)
     }
 
-    /* ───────────── Commands (by cart_id) ───────────── */
+    /* ───────────── Commands ───────────── */
+
     pub async fn complete_new_cart(&self, user_id: Uuid) -> Result<Cart, CartError> {
         self.get_or_create_active_cart(user_id).await
     }
@@ -121,5 +121,5 @@ impl<R: CartRepo> CartService<R> {
 pub enum CartState {
     Active(Uuid),
     Confirming(Uuid),
-    New, // locked یا هیچ cart فعالی نیست
+    New,
 }
