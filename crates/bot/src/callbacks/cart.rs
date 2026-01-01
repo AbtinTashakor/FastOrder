@@ -9,11 +9,7 @@ use crate::views::cart_view::{
     confirming_keyboard, render_cart_by_state, render_confirming_view, CartRenderResult,
 };
 
-pub async fn handle_cart_action(
-    bot: Bot,
-    ctx: BotContext,
-    q: CallbackQuery,
-) -> Result<()> {
+pub async fn handle_cart_action(bot: Bot, ctx: BotContext, q: CallbackQuery) -> Result<()> {
     let data = q.data.as_deref().unwrap_or("");
 
     let msg = match q.message.as_ref() {
@@ -51,9 +47,7 @@ pub async fn handle_cart_action(
                 return Ok(());
             };
 
-            ctx.cart_service
-                .inc_item_by_cart(cart_id, item_id)
-                .await?;
+            ctx.cart_service.inc_item_by_cart(cart_id, item_id).await?;
             render_and_edit(&bot, &ctx, msg, user.id).await?;
         }
 
@@ -63,9 +57,7 @@ pub async fn handle_cart_action(
                 return Ok(());
             };
 
-            ctx.cart_service
-                .dec_item_by_cart(cart_id, item_id)
-                .await?;
+            ctx.cart_service.dec_item_by_cart(cart_id, item_id).await?;
             render_and_edit(&bot, &ctx, msg, user.id).await?;
         }
 
@@ -113,17 +105,9 @@ pub async fn handle_cart_action(
                 return Ok(());
             };
 
-            let order = db::order_repo::create_order_from_cart(
-                &ctx.db,
-                user.id,
-                cart_id,
-            )
-            .await?;
+            let order = ctx.order_service.create_from_cart(user.id, cart_id).await?;
 
-            let text = format!(
-                "✅ سفارش شما ثبت شد\n\n🧾 کد سفارش: {}",
-                order.order_code
-            );
+            let text = format!("✅ سفارش شما ثبت شد\n\n🧾 کد سفارش: {}", order.order_code);
 
             bot.edit_message_text(msg.chat.id, msg.id, text)
                 .reply_markup(InlineKeyboardMarkup::default())
