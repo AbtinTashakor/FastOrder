@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -63,7 +64,7 @@ impl PgOrderRepo {
         self.clear_cart(&mut tx, cart_id).await?;
 
         tx.commit().await?;
-        Ok(Self::map_order(row)?)
+        Self::map_order(row)
     }
 
     /* ───────────────────── Mapping ───────────────────── */
@@ -264,18 +265,98 @@ impl PgOrderRepo {
 
         Ok(())
     }
+
+    /* ───────────────────── New infra helpers for assign ───────────────────── */
+
+    async fn find_by_id_inner(&self, order_id: Uuid) -> Result<Order> {
+        let row = sqlx::query_as::<_, OrderRow>(
+            "SELECT * FROM orders WHERE id = $1"
+        )
+        .bind(order_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Self::map_order(row)
+    }
 }
 
 /* ───────────────────── Trait implementation ───────────────────── */
 
 #[async_trait]
 impl OrderRepo for PgOrderRepo {
+
     async fn create_from_cart(
         &self,
         user_id: Uuid,
         cart_id: Uuid,
     ) -> Result<Order> {
         self.create_from_cart_inner(user_id, cart_id).await
+    }
+
+    async fn find_by_id(
+        &self,
+        order_id: Uuid,
+    ) -> Result<Order> {
+        self.find_by_id_inner(order_id).await
+    }
+
+    async fn set_status(
+        &self,
+        order_id: Uuid,
+        status: OrderStatus,
+    ) -> Result<()> {
+        sqlx::query!(
+            "UPDATE orders SET status = $2 WHERE id = $1",
+            order_id,
+            status.as_str()
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn assign_operator(
+        &self,
+        order_id: Uuid,
+        operator_id: Option<Uuid>,
+        assigned_at: Option<DateTime<Utc>>,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE orders
+            SET operator_id = $2,
+                assigned_at = $3
+            WHERE id = $1
+            "#,
+            order_id,
+            operator_id,
+            assigned_at
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn mark_seen(
+        &self,
+        order_id: Uuid,
+        seen_at: DateTime<Utc>,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE orders
+            SET seen_at = $2
+            WHERE id = $1
+            "#,
+            order_id,
+            seen_at
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
 

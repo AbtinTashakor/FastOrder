@@ -18,37 +18,42 @@ impl<R: OperatorStateRepo> OperatorStateService<R> {
 
     /* ───────────── Query ───────────── */
 
-    pub fn get_state(&self, operator_id: Uuid) -> Result<OperatorState> {
-        self.repo.get(operator_id)
+    pub async fn get_state(&self, operator_id: Uuid) -> Result<OperatorState> {
+        self.repo.get(operator_id).await
     }
 
-    pub fn is_on_shift(&self, operator_id: Uuid) -> Result<bool> {
-        Ok(self.repo.get(operator_id)?.is_on_shift)
+    pub async fn is_on_shift(&self, operator_id: Uuid) -> Result<bool> {
+        Ok(self.repo.get(operator_id).await?.is_on_shift)
     }
 
-    pub fn is_viewing_order(&self, operator_id: Uuid) -> Result<bool> {
-        Ok(self.repo.get(operator_id)?.current_view == OperatorView::Order)
+    pub async fn is_viewing_order(&self, operator_id: Uuid) -> Result<bool> {
+        Ok(
+            self.repo.get(operator_id).await?.current_view
+                == OperatorView::Order
+        )
     }
 
     /* ───────────── Commands ───────────── */
 
-    pub fn start_shift(&self, operator_id: Uuid) -> Result<()> {
-        self.repo.set_on_shift(operator_id, true)
+    pub async fn start_shift(&self, operator_id: Uuid) -> Result<()> {
+        self.repo.set_on_shift(operator_id, true).await
     }
 
-    pub fn end_shift(&self, operator_id: Uuid) -> Result<()> {
-        self.repo.set_on_shift(operator_id, false)
+    pub async fn end_shift(&self, operator_id: Uuid) -> Result<()> {
+        self.repo.set_on_shift(operator_id, false).await
     }
 
-    pub fn enter_list_view(&self, operator_id: Uuid) -> Result<()> {
-        self.repo.set_view_list(operator_id)
+    pub async fn enter_list_view(&self, operator_id: Uuid) -> Result<()> {
+        self.repo.set_view_list(operator_id).await
     }
 
-    pub fn enter_order_view(
+    pub async fn enter_order_view(
         &self,
         operator_id: Uuid,
         order_id: Uuid,
     ) -> Result<()> {
-        self.repo.set_view_order(operator_id, order_id)
+        self.repo
+            .set_view_order(operator_id, order_id)
+            .await
     }
 }

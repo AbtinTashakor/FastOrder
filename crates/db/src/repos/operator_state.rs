@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -16,49 +17,34 @@ impl PgOperatorStateRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-
-    fn map_row(
-        operator_id: Uuid,
-        is_on_shift: bool,
-        current_view: &str,
-        current_order_id: Option<Uuid>,
-    ) -> Result<OperatorState> {
-        Ok(OperatorState {
-            operator_id,
-            is_on_shift,
-            current_view: OperatorView::from_str(current_view),
-            current_order_id,
-        })
-    }
 }
+
+#[async_trait]
 impl OperatorStateRepo for PgOperatorStateRepo {
 
-    fn get(&self, operator_id: Uuid) -> Result<OperatorState> {
+    async fn get(&self, operator_id: Uuid) -> Result<OperatorState> {
         let row = sqlx::query!(
             r#"
-            SELECT
-                operator_id,
-                is_on_shift,
-                current_view,
-                current_order_id
+            SELECT operator_id, is_on_shift, current_view, current_order_id
             FROM operator_state
             WHERE operator_id = $1
             "#,
             operator_id
         )
-        .fetch_optional(&self.pool)?;
+        .fetch_optional(&self.pool)
+        .await?;
 
         let row = row.ok_or_else(|| anyhow!("operator_state not found"))?;
 
-        Self::map_row(
-            row.operator_id,
-            row.is_on_shift,
-            &row.current_view,
-            row.current_order_id,
-        )
+        Ok(OperatorState {
+            operator_id: row.operator_id,
+            is_on_shift: row.is_on_shift,
+            current_view: OperatorView::from_str(&row.current_view),
+            current_order_id: row.current_order_id,
+        })
     }
 
-    fn set_on_shift(&self, operator_id: Uuid, on_shift: bool) -> Result<()> {
+    async fn set_on_shift(&self, operator_id: Uuid, on_shift: bool) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE operator_state
@@ -69,12 +55,13 @@ impl OperatorStateRepo for PgOperatorStateRepo {
             operator_id,
             on_shift
         )
-        .execute(&self.pool)?;
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
 
-    fn set_view_list(&self, operator_id: Uuid) -> Result<()> {
+    async fn set_view_list(&self, operator_id: Uuid) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE operator_state
@@ -85,12 +72,17 @@ impl OperatorStateRepo for PgOperatorStateRepo {
             "#,
             operator_id
         )
-        .execute(&self.pool)?;
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
 
-    fn set_view_order(&self, operator_id: Uuid, order_id: Uuid) -> Result<()> {
+    async fn set_view_order(
+        &self,
+        operator_id: Uuid,
+        order_id: Uuid,
+    ) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE operator_state
@@ -102,7 +94,8 @@ impl OperatorStateRepo for PgOperatorStateRepo {
             operator_id,
             order_id
         )
-        .execute(&self.pool)?;
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }

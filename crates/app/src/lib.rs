@@ -1,14 +1,3 @@
-//! Application layer (business logic)
-//!
-//! This crate contains:
-//! - Domain models
-//! - Repository contracts (traits)
-//! - Use-cases (services)
-//!
-//! ❌ No database code
-//! ❌ No Telegram / HTTP / UI code
-//! ✅ Pure business logic
-
 /* ───────────────────── Models (domain) ───────────────────── */
 
 pub mod models {
@@ -16,15 +5,21 @@ pub mod models {
     pub mod cart;
     pub mod menu;
     pub mod order;
+    pub mod operator_state;
 }
 
-/* ───────────────────── Repository contracts ───────────────────── */
+/* ───────────────────── Repository contracts (policy) ───────────────────── */
 
 pub mod repos {
     pub mod user;
     pub mod cart;
     pub mod menu;
     pub mod order;
+
+    // operator / dispatch
+    pub mod operator_state;
+    pub mod operator_directory;
+    pub mod system_state;
 }
 
 /* ───────────────────── Use-cases (services) ───────────────────── */
@@ -49,5 +44,15 @@ pub mod services {
     pub mod order {
         pub mod service;
         pub mod error;
+    }
+
+    /* operator workflow */
+
+    pub mod operator_state {
+        pub mod service;
+    }
+
+    pub mod assign {
+        pub mod service;
     }
 }
