@@ -1,28 +1,32 @@
-mod callbacks;
 mod context;
 mod handlers;
 mod keyboards;
 mod views;
 
+mod router;
+mod features;
+
 use context::BotContext;
 use teloxide::prelude::*;
+use teloxide::dispatching::UpdateFilterExt;
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
     pretty_env_logger::init();
 
-    use crate::handlers::{handle_callback, handle_message};
-    use teloxide::dispatching::UpdateFilterExt;
-
     let bot = Bot::from_env();
     let ctx = BotContext::new().await.expect("Context init failed");
 
     log::info!("🤖 FastOrder bot started");
 
-    let message_handler = Update::filter_message().endpoint(handle_message);
+    //  message routing
+    let message_handler =
+        Update::filter_message().endpoint(router::message::handle_message);
 
-    let callback_handler = Update::filter_callback_query().endpoint(handle_callback);
+    //  callback routing
+    let callback_handler =
+        Update::filter_callback_query().endpoint(router::callback::handle_callback);
 
     let handler = dptree::entry()
         .branch(message_handler)
