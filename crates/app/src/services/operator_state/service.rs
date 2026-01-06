@@ -57,3 +57,15 @@ impl<R: OperatorStateRepo> OperatorStateService<R> {
             .await
     }
 }
+
+
+use crate::services::operator_state::assign_port::OperatorShiftControl;
+
+#[async_trait::async_trait]
+impl<R: crate::repos::operator_state::OperatorStateRepo> OperatorShiftControl
+    for OperatorStateService<R>
+{
+    async fn end_shift(&self, operator_id: Uuid) -> Result<()> {
+        OperatorStateService::end_shift(self, operator_id).await
+    }
+}

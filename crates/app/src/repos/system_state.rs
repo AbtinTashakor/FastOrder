@@ -1,5 +1,6 @@
 use anyhow::Result;
 use uuid::Uuid;
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait SystemStateRepo: Send + Sync {

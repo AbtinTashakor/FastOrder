@@ -20,6 +20,7 @@ pub mod repos {
     pub mod operator_state;
     pub mod operator_directory;
     pub mod system_state;
+
 }
 
 /* ───────────────────── Use-cases (services) ───────────────────── */
@@ -50,6 +51,8 @@ pub mod services {
 
     pub mod operator_state {
         pub mod service;
+        pub mod assign_port;
+        
     }
 
     pub mod assign {

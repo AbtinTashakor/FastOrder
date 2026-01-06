@@ -9,7 +9,7 @@ use crate::{
         operator_directory::OperatorDirectory,
         system_state::SystemStateRepo,
     },
-    services::operator_state::service::OperatorStateService,
+    services::operator_state::assign_port::OperatorShiftControl,
 };
 
 #[derive(Clone)]
@@ -17,19 +17,19 @@ pub struct AssignService<
     O: OrderRepo,
     D: OperatorDirectory,
     S: SystemStateRepo,
-    OS: Clone + Send + Sync,
+    OS: OperatorShiftControl + Clone,
 > {
     orders: O,
     directory: D,
     system_state: S,
-    operator_state: OS, // OperatorStateService
+    operator_state: OS,
 }
 
 impl<
         O: OrderRepo,
         D: OperatorDirectory,
         S: SystemStateRepo,
-        OS: Clone + Send + Sync,
+        OS: OperatorShiftControl + Clone,
     > AssignService<O, D, S, OS>
 {
     pub fn new(
@@ -55,7 +55,9 @@ impl<
             self.orders
                 .set_status(order_id, OrderStatus::WaitingForOperator)
                 .await?;
-            self.orders.assign_operator(order_id, None, None).await?;
+            self.orders
+                .assign_operator(order_id, None, None)
+                .await?;
             return Ok(());
         }
 
