@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::models::OrderRow;
 
-// app domain + policy
+// app domain
 use app::{
     models::order::{Order, OrderStatus},
     repos::order::OrderRepo,
@@ -30,22 +30,18 @@ impl PgOrderRepo {
     ) -> Result<Order> {
         let mut tx = self.pool.begin().await?;
 
-        /* 1️⃣ lock cart */
         self.lock_cart(&mut tx, user_id, cart_id).await?;
 
-        /* 2️⃣ load cart items (WITH SNAPSHOT) */
         let items = self.load_cart_items(&mut tx, cart_id).await?;
         if items.is_empty() {
             return Err(anyhow!("cart is empty"));
         }
 
-        /* 3️⃣ calculate total */
         let total_price: i64 = items
             .iter()
             .map(|i| i.price_snapshot * i.quantity as i64)
             .sum();
 
-        /* 4️⃣ generate daily order number */
         let daily_no = self.next_daily_number(&mut tx).await?;
         let order_code = format!(
             "FO-{}-{}",
@@ -53,7 +49,6 @@ impl PgOrderRepo {
             daily_no
         );
 
-        /* 5️⃣ insert order */
         let row = self
             .insert_order(
                 &mut tx,
@@ -64,36 +59,35 @@ impl PgOrderRepo {
             )
             .await?;
 
-        /* 6️⃣ insert order items (title_snapshot ✔) */
         self.insert_order_items(&mut tx, row.id, items).await?;
-
-        /* 7️⃣ clear cart */
         self.clear_cart(&mut tx, cart_id).await?;
 
         tx.commit().await?;
-        Ok(Self::map_order(row))
+        Ok(Self::map_order(row)?)
     }
 
     /* ───────────────────── Mapping ───────────────────── */
 
-    fn map_order(row: OrderRow) -> Order {
-        Order {
+    fn map_order(row: OrderRow) -> Result<Order> {
+        Ok(Order {
             id: row.id,
             user_id: row.user_id,
             order_day: row.order_day,
             daily_no: row.daily_no,
             order_code: row.order_code,
             total_price: row.total_price,
-            status: match row.status.as_str() {
-                "pending" => OrderStatus::Pending,
-                "accepted" => OrderStatus::Accepted,
-                "rejected" => OrderStatus::Rejected,
-                "completed" => OrderStatus::Completed,
-                _ => OrderStatus::Pending,
-            },
+
+            status: OrderStatus::try_from(row.status.as_str())?,
+
+            operator_id: row.operator_id,
+            assigned_at: row.assigned_at,
+            seen_at: row.seen_at,
+
             prep_time_minutes: row.prep_time_minutes,
+            retry_count: row.retry_count,
+
             created_at: row.created_at,
-        }
+        })
     }
 
     /* ───────────────────── Internals ───────────────────── */
@@ -209,7 +203,7 @@ impl PgOrderRepo {
                 $2,
                 $3,
                 $4,
-                'pending'
+                'PENDING_ASSIGN'
             )
             RETURNING *
             "#
@@ -272,9 +266,7 @@ impl PgOrderRepo {
     }
 }
 
-/* ───────────────────────────────────────────────
-   Trait implementation (Contract fulfillment)
-   ─────────────────────────────────────────────── */
+/* ───────────────────── Trait implementation ───────────────────── */
 
 #[async_trait]
 impl OrderRepo for PgOrderRepo {
