@@ -8,7 +8,7 @@ use app::services::cart::service::CartState;
 use crate::{
     context::BotContext,
     router::callback_data::CallbackData,
-    views::cart_view::{
+    features::cart::views::{
         confirming_keyboard, render_cart_by_state, render_confirming_view, CartRenderResult,
     },
 };

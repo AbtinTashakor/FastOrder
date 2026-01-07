@@ -4,8 +4,8 @@ use teloxide::prelude::*;
 use teloxide::types::KeyboardRemove;
 
 use crate::context::BotContext;
-use crate::keyboards::{order_entry_keyboard, request_phone_keyboard};
-use crate::views::cart_view::{render_cart_by_state, CartRenderResult};
+use crate::features::cart::keyboards::{order_entry_keyboard, request_phone_keyboard};
+use crate::features::cart::views::{render_cart_by_state, CartRenderResult};
 
 const WELCOME_TEXT: &str = "👋 خوش اومدی به FastOrder!\nسفارش سریع، بدون تماس تلفنی.";
 
