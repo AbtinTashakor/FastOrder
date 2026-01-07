@@ -10,7 +10,7 @@ pub async fn handle_callback(
     bot: Bot,
     q: CallbackQuery,
     ctx: BotContext,
-) -> Result<(), teloxide::RequestError> {
+) -> ResponseResult<()> {
     let data = match q.data.as_deref() {
         Some(d) => d,
         None => return Ok(()),
@@ -28,10 +28,6 @@ pub async fn handle_callback(
             }
             Ok(())
         }
-
-        // future:
-        // "operator" => operator::callbacks::handle(...),
-
         _ => Ok(()),
     }
 }

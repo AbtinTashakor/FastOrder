@@ -1,13 +1,14 @@
 mod context;
 mod handlers;
 
-
 mod router;
 mod features;
 
 use context::BotContext;
-use teloxide::prelude::*;
 use teloxide::dispatching::UpdateFilterExt;
+use teloxide::prelude::*;
+
+use features::auth::handlers as auth;
 
 #[tokio::main]
 async fn main() {
@@ -19,13 +20,28 @@ async fn main() {
 
     log::info!("🤖 FastOrder bot started");
 
-    //  message routing
-    let message_handler =
-        Update::filter_message().endpoint(router::message::handle_message);
+    let message_handler = Update::filter_message().endpoint(
+        |bot: Bot, msg: Message, ctx: BotContext| async move {
+            if msg.text() == Some("/start") {
+                auth::handle_start(bot, msg, ctx).await?;
+                return Ok(());
+            }
 
-    //  callback routing
-    let callback_handler =
-        Update::filter_callback_query().endpoint(router::callback::handle_callback);
+            if msg.contact().is_some() {
+                auth::handle_contact(bot, msg, ctx).await?;
+                return Ok(());
+            }
+
+            router::message::handle_message(bot, msg, ctx).await
+        },
+    );
+
+    let callback_handler = Update::filter_callback_query().endpoint(
+        |bot: Bot, q: CallbackQuery, ctx: BotContext| async move {
+            router::callback::handle_callback(bot, q, ctx).await?;
+            Ok(())
+        },
+    );
 
     let handler = dptree::entry()
         .branch(message_handler)

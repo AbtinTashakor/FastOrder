@@ -6,6 +6,6 @@ pub async fn handle_message(
     bot: Bot,
     msg: Message,
     ctx: BotContext,
-) -> Result<(), teloxide::RequestError> {
+) -> ResponseResult<()> {
     handlers::handle_message(bot, msg, ctx).await
 }
